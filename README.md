@@ -60,8 +60,12 @@ linked (no dynamic linker overhead).
 **Raspberry Pi CM4 (aarch64), Debian 12, glibc:**
 
 ```text
-  2.10 msec task-clock    131 page-faults      (BCM2711 @ 1.5 GHz)
+  2.91 msec task-clock    122 page-faults    1,012,235 cycles
+    802,694 instructions  (0.79-0.93 IPC)        5,698 branch-misses
 ```
+
+Note: Pi results vary with CPU governor — 4.76ms cold (0.7 GHz) to 2.91ms
+warm (1.5 GHz boost). Instruction count is stable at ~803K across all runs.
 
 At these timescales, the ELF loader and libc/kernel init are a meaningful
 fraction of total execution time. musl eliminates ~55 page faults by
