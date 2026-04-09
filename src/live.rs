@@ -209,11 +209,11 @@ pub fn run_live(info: &mut SysInfo, frame: &mut Frame, mut layout: Layout, inter
     if timer_fd >= 0 {
         let spec = libc::itimerspec {
             it_interval: libc::timespec {
-                tv_sec: interval_s as i64,
+                tv_sec: interval_s as _,
                 tv_nsec: 0,
             },
             it_value: libc::timespec {
-                tv_sec: interval_s as i64,
+                tv_sec: interval_s as _,
                 tv_nsec: 0,
             },
         };

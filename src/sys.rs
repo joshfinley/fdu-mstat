@@ -157,7 +157,7 @@ fn capitalize_into<const N: usize>(src: &[u8], dst: &mut Buf<N>) {
 /// Format a Unix timestamp as "Mon DD YYYY HH:MM".
 fn format_timestamp<const N: usize>(ts: i64, buf: &mut Buf<N>) {
     unsafe {
-        let time: libc::time_t = ts;
+        let time: libc::time_t = ts as libc::time_t;
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&time, &mut tm);
         buf.push_bytes(MONTHS[(tm.tm_mon as usize) % 12]);
