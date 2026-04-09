@@ -1,0 +1,21 @@
+[package]
+name = "fdu-mstat"
+version = "0.1.0"
+edition = "2024"
+license = "BSD-3-Clause"
+description = "Zero-allocation Linux system information display"
+authors = ["Joshua Finley"]
+
+[[bin]]
+name = "mstat"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+crossbeam-utils = "0.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
