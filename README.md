@@ -55,8 +55,9 @@ ZFS health (fires only when ZFS is detected in `/proc/mounts`).
 
 At 1.26ms, the ELF loader and libc init are a meaningful fraction of total
 execution time. The program itself completes in under 1ms of user-space work.
+MUSL builds can easily clock <1 msec task-clock on most systems.
 
-This is a **~230x speedup** over the original bash implementation (291ms),
+This is a **>230x speedup** over the original bash implementation (291ms),
 which spawned ~15 subprocesses (`lscpu`, `who`, `lastlog`, `grep`, `awk`,
 `df`, subshells for bar graphs, etc.). The Rust version spawns zero
 subprocesses and makes zero heap allocations in the data/render path.
@@ -67,10 +68,20 @@ subprocesses and makes zero heap allocations in the data/render path.
 # Host build
 cargo build --release
 
-# Cross-compile (requires `cross` — uses Docker)
+# Cross-compile (requires `cross` + podman)
 cargo install cross
-make bundle CROSS=1
+make bundle              # builds all targets, tarballs in dist/
+make release TARGET=aarch64-unknown-linux-gnu  # single target
 ```
+
+Cross-compilation uses [cross](https://github.com/cross-rs/cross) with
+podman as the container engine (set via `CROSS_CONTAINER_ENGINE=podman` in
+the Makefile). Docker works too — override with
+`make bundle CROSS_CONTAINER_ENGINE=docker`.
+
+**Note:** run `cargo clean` before cross-compiling if you previously built
+for the host, otherwise cached build scripts may fail with glibc version
+mismatches.
 
 Release artifacts are placed in `dist/` with SHA256 checksums.
 

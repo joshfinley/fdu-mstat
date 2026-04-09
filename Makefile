@@ -24,7 +24,10 @@ TARGETS  := x86_64-unknown-linux-gnu \
             armv7-unknown-linux-gnueabihf \
             riscv64gc-unknown-linux-gnu
 
-# Use cross for non-host targets, plain cargo for host
+# Use cross (via podman) for non-host targets, plain cargo for host.
+# cross needs CROSS_CONTAINER_ENGINE=podman since we use podman, not docker.
+export CROSS_CONTAINER_ENGINE ?= podman
+
 ifeq ($(TARGET),$(HOST))
   CARGO_CMD = cargo
 else

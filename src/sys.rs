@@ -4,7 +4,7 @@
 //! allocation occurs. The only subprocess fallback is ZFS (zfs/zpool
 //! commands), which fires only when ZFS filesystems are detected.
 
-use crossbeam_utils::CachePadded;
+use crate::cache_padded::CachePadded;
 
 use crate::buf::Buf;
 
@@ -24,6 +24,7 @@ const P_ROOT: *const u8 = b"/\0".as_ptr();
 pub const P_CPU_FREQ: *const u8 =
     b"/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq\0".as_ptr();
 const P_SD_SESSIONS: *const u8 = b"/run/systemd/sessions\0".as_ptr();
+const P_DT_MODEL: *const u8 = b"/sys/firmware/devicetree/base/model\0".as_ptr();
 
 const MONTHS: [&[u8]; 12] = [
     b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec",
@@ -464,24 +465,54 @@ fn collect_net(data: &mut NetData, user_bytes: &[u8]) {
 
 /// Collect CPU info from /proc/cpuinfo: model, core/socket topology,
 /// frequency, hypervisor detection, and load averages.
+///
+/// x86 and ARM have different /proc/cpuinfo layouts:
+///   x86:  "model name", "cpu MHz", "cpu cores", "physical id"
+///   ARM:  "Model" (at end of file), no MHz/cores/physical id
+///
+/// Fallbacks: sysfs for frequency, devicetree for model name, and
+/// processor line count for core count.
 fn collect_cpu(data: &mut CpuData) {
     let mut buf = [0u8; 16384];
     let n = raw_read(P_CPUINFO, &mut buf);
     let content = &buf[..n];
 
+    // Model name: x86 "model name", ARM "Model", then devicetree fallback
     if let Some(v) = find_val(content, b"model name", b':') {
         data.model.push_bytes(v);
-    }
-    if let Some(v) = find_val(content, b"cpu MHz", b':') {
-        data.freq.push_f64_2dp(parse_f64_b(v) / 1000.0);
-    }
-    if let Some(v) = find_val(content, b"cpu cores", b':') {
-        data.cores_per_socket.push_bytes(v);
+    } else if let Some(v) = find_val(content, b"Model", b':') {
+        data.model.push_bytes(v);
     } else {
-        data.cores_per_socket.push_byte(b'1');
+        // ARM devicetree: /sys/firmware/devicetree/base/model
+        let mut mbuf = [0u8; 256];
+        let mn = raw_read(P_DT_MODEL, &mut mbuf);
+        if mn > 0 {
+            // Strip trailing null byte if present
+            let end = cstr_len(&mbuf[..mn]);
+            data.model.push_bytes(&mbuf[..end]);
+        }
     }
 
-    // Count unique physical IDs → socket count; count processor lines → CPU count
+    // CPU frequency: x86 "cpu MHz", fallback to sysfs scaling_cur_freq
+    if let Some(v) = find_val(content, b"cpu MHz", b':') {
+        data.freq.push_f64_2dp(parse_f64_b(v) / 1000.0);
+    } else {
+        let mut fbuf = [0u8; 32];
+        let flen = raw_read(P_CPU_FREQ, &mut fbuf);
+        if flen > 0 {
+            let khz = parse_u64_b(&fbuf[..flen]);
+            data.freq.push_f64_2dp(khz as f64 / 1_000_000.0);
+        }
+    }
+
+    // Cores per socket: x86 "cpu cores", ARM fallback to processor count
+    let has_cpu_cores = find_val(content, b"cpu cores", b':');
+    if let Some(v) = has_cpu_cores {
+        data.cores_per_socket.push_bytes(v);
+    }
+
+    // Count unique physical IDs for socket count; count processor lines for CPU count.
+    // On ARM, physical id doesn't exist: socket_count stays 1, cpu_count = processor lines.
     let mut seen = [false; 256];
     let mut socket_count: u64 = 0;
     let mut cpu_count: u64 = 0;
@@ -504,6 +535,10 @@ fn collect_cpu(data: &mut CpuData) {
     }
     if cpu_count == 0 {
         cpu_count = 1;
+    }
+    // If "cpu cores" wasn't in cpuinfo, use total processor count
+    if has_cpu_cores.is_none() {
+        data.cores_per_socket.push_u64(cpu_count);
     }
     data.sockets.push_u64(socket_count);
     data.total_cores = cpu_count as f64;

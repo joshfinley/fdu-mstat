@@ -12,7 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 libc = "0.2"
-crossbeam-utils = "0.8"
 
 [profile.release]
 opt-level = "z"

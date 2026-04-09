@@ -13,6 +13,7 @@
 //! ```
 
 mod buf;
+mod cache_padded;
 mod frame;
 mod live;
 mod render;
