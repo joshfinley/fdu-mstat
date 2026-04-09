@@ -38,24 +38,34 @@ files via raw `libc::open`/`read`/`close` calls into stack buffers. Zero heap
 allocation in the data and render path. The only subprocess fallback is for
 ZFS health (fires only when ZFS is detected in `/proc/mounts`).
 
-### Benchmark (Intel i5-4300U Haswell, Debian 13)
+### Benchmarks
 
-```
- Performance counter stats for './target/release/mstat':
+All measurements via `perf stat`, one-shot mode. musl builds are statically
+linked (no dynamic linker overhead).
 
-           1.26 msec task-clock
-              0      context-switches
-              0      cpu-migrations
-            127      page-faults
-      2,842,384      cycles                    #  2.571 GHz
-      2,494,845      instructions              #  0.88  insn per cycle
-        593,784      branches
-         16,189      branch-misses             #  2.73% of all branches
+**Intel i5-4300U Haswell, Debian 13, glibc:**
+
+```text
+  1.26 msec task-clock    127 page-faults    2,842,384 cycles
+  2,494,845 instructions  (0.88 IPC)         16,189 branch-misses
 ```
 
-At 1.26ms, the ELF loader and libc init are a meaningful fraction of total
-execution time. The program itself completes in under 1ms of user-space work.
-MUSL builds can easily clock <1 msec task-clock on most systems.
+**QEMU/KVM x86_64, openSUSE Leap 16, musl (static):**
+
+```text
+  0.79 msec task-clock     72 page-faults    1,986,193 cycles
+  2,114,984 instructions  (1.06 IPC)
+```
+
+**Raspberry Pi CM4 (aarch64), Debian 12, glibc:**
+
+```text
+  2.10 msec task-clock    131 page-faults      (BCM2711 @ 1.5 GHz)
+```
+
+At these timescales, the ELF loader and libc/kernel init are a meaningful
+fraction of total execution time. musl eliminates ~55 page faults by
+removing the dynamic linker entirely, pushing below 1ms on most hardware.
 
 This is a **>230x speedup** over the original bash implementation (291ms),
 which spawned ~15 subprocesses (`lscpu`, `who`, `lastlog`, `grep`, `awk`,
